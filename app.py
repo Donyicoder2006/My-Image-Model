@@ -8,16 +8,14 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 
-# Load your model (upload it to server root later)
-model = tf.keras.models.load_model("image_model.keras")
+# TEMPORARY FIX: Disable model loading
+model = None
 
 app = FastAPI()
 
-# Templates & static files
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Allow frontend access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -27,33 +25,40 @@ app.add_middleware(
 )
 
 def preprocess(img):
-    img = img.resize((224, 224))   # Set your input size
+    img = img.resize((224, 224))
     img = np.array(img) / 255.0
     img = np.expand_dims(img, 0)
     return img
 
-def convert_to_label(pred):
-    """Convert model output to High / Medium / Low."""
-    score = float(pred[0][0])  # Assumes 1 output neuron
-
-    if score >= 0.7:
-        return "High Score"
-    elif score >= 0.4:
-        return "Medium Score"
-    else:
-        return "Low Score"
-
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request, "prediction": None})
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request, "prediction": None}
+    )
 
 @app.post("/predict", response_class=HTMLResponse)
 async def predict(request: Request, file: UploadFile = File(...)):
+    
+    # TEMPORARY WARNING (until model is uploaded)
+    if model is None:
+        return templates.TemplateResponse(
+            "index.html",
+            {"request": request, "prediction": "MODEL NOT LOADED — Upload image_model.keras to server."}
+        )
+
     img = Image.open(file.file).convert("RGB")
     x = preprocess(img)
     pred = model.predict(x)
 
-    label = convert_to_label(pred)
+    # Convert pred to High/Medium/Low
+    score = float(pred[0][0])
+    if score >= 0.7:
+        label = "High Score"
+    elif score >= 0.4:
+        label = "Medium Score"
+    else:
+        label = "Low Score"
 
     return templates.TemplateResponse(
         "index.html",
